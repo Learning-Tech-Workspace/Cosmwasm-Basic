@@ -18,7 +18,7 @@ pub fn instantiate(
     // like the main function
     // call when first time create
     use contract::instantiate;
-    instantiate(deps, msg.counter);
+    instantiate(deps, msg.counter, msg.minimal_donation);
     Ok(Response::new())
 }
 
@@ -34,17 +34,17 @@ pub fn query(deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
 
 #[entry_point]
 pub fn execute(deps: DepsMut, _env: Env, info: MessageInfo, msg: ExecMsg) -> StdResult<Response> {
-    use contract::execute::{poke, reset};
+    use contract::execute::{donate, reset};
     use msg::ExecMsg::*;
     match msg {
-        Poke {} => poke(deps, info),
+        Donate {} => donate(deps, info),
         Reset { value } => reset(deps, info, value),
     }
 }
 
 #[cfg(test)]
 mod test {
-    use cosmwasm_std::{Addr, Empty};
+    use cosmwasm_std::{coin, coins, Addr, Empty};
     use cw_multi_test::{App, Contract, ContractWrapper, Executor};
 
     use crate::{
@@ -70,7 +70,10 @@ mod test {
             .instantiate_contract(
                 contract_id,
                 Addr::unchecked("sender"),
-                &InitMsg { counter: 10 },
+                &InitMsg {
+                    counter: 10,
+                    minimal_donation: coin(10, "NEAR"),
+                },
                 &[],
                 "Counting contract",
                 None,
@@ -95,7 +98,10 @@ mod test {
             .instantiate_contract(
                 contract_id,
                 Addr::unchecked("sender"),
-                &InitMsg { counter: 10 },
+                &InitMsg {
+                    counter: 10,
+                    minimal_donation: coin(10, "NEAR"),
+                },
                 &[],
                 "Counting Contract",
                 None,
@@ -111,7 +117,7 @@ mod test {
     }
 
     #[test]
-    fn execute_poke() {
+    fn execute_donate() {
         let mut app = App::default();
 
         let contract_id = app.store_code(counting_contract());
@@ -122,7 +128,10 @@ mod test {
             .instantiate_contract(
                 contract_id,
                 sender.clone(),
-                &InitMsg { counter: 0 },
+                &InitMsg {
+                    counter: 0,
+                    minimal_donation: coin(10, "NEAR"),
+                },
                 &[],
                 "Counting Contract",
                 None,
@@ -130,7 +139,85 @@ mod test {
             .unwrap();
 
         // increment counter in state by one
-        app.execute_contract(sender, contract_addr.clone(), &ExecMsg::Poke {}, &[]);
+        app.execute_contract(sender, contract_addr.clone(), &ExecMsg::Donate {}, &[]);
+
+        // get counter from state
+        let resp: ValueResp = app
+            .wrap()
+            .query_wasm_smart(contract_addr, &QueryMsg::Value {})
+            .unwrap();
+
+        assert_eq!(resp, ValueResp { value: 0 });
+    }
+
+    #[test]
+    fn execute_donate_with_funds() {
+        let sender = Addr::unchecked("sender");
+        let mut app = App::new(|router, _api, storage| {
+            router
+                .bank
+                .init_balance(storage, &sender, coins(10, "NEAR"))
+                .unwrap()
+        });
+
+        let contract_id = app.store_code(counting_contract());
+
+        let contract_addr = app
+            .instantiate_contract(
+                contract_id,
+                sender.clone(),
+                &InitMsg {
+                    counter: 0,
+                    minimal_donation: coin(10, "NEAR"),
+                },
+                &[],
+                "Counting Contract",
+                None,
+            )
+            .unwrap();
+
+        // increment counter in state by one
+        app.execute_contract(
+            sender,
+            contract_addr.clone(),
+            &ExecMsg::Donate {},
+            &coins(10, "NEAR"),
+        )
+        .unwrap();
+
+        // get counter from state
+        let resp: ValueResp = app
+            .wrap()
+            .query_wasm_smart(contract_addr, &QueryMsg::Value {})
+            .unwrap();
+
+        assert_eq!(resp, ValueResp { value: 1 });
+    }
+
+    #[test]
+    fn expecting_no_funds() {
+        let sender = Addr::unchecked("sender");
+        let mut app = App::default();
+
+        let contract_id = app.store_code(counting_contract());
+
+        let contract_addr = app
+            .instantiate_contract(
+                contract_id,
+                sender.clone(),
+                &InitMsg {
+                    counter: 0,
+                    minimal_donation: coin(0, "Bitcoin"),
+                },
+                &[],
+                "Counting Contract",
+                None,
+            )
+            .unwrap();
+
+        // increment counter in state by one
+        app.execute_contract(sender, contract_addr.clone(), &ExecMsg::Donate {}, &[])
+            .unwrap();
 
         // get counter from state
         let resp: ValueResp = app
@@ -153,7 +240,10 @@ mod test {
             .instantiate_contract(
                 contract_id,
                 sender.clone(),
-                &InitMsg { counter: 0 },
+                &InitMsg {
+                    counter: 0,
+                    minimal_donation: coin(10, "NEAR"),
+                },
                 &[],
                 "Counting Contract",
                 None,
@@ -172,6 +262,6 @@ mod test {
             .query_wasm_smart(contract_addr, &QueryMsg::Value {})
             .unwrap();
 
-        assert_eq!(resp, ValueResp { value: 1 });
+        assert_eq!(resp, ValueResp { value: 5 });
     }
 }
