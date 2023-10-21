@@ -11,14 +11,14 @@ mod state;
 #[entry_point]
 pub fn instantiate(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     _info: MessageInfo,
     msg: InitMsg,
 ) -> StdResult<Response> {
     // like the main function
     // call when first time create
     use contract::instantiate;
-    instantiate(deps, msg.counter, msg.minimal_donation);
+    instantiate(deps, env, msg.counter, msg.minimal_donation);
     Ok(Response::new())
 }
 
@@ -33,12 +33,13 @@ pub fn query(deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
 }
 
 #[entry_point]
-pub fn execute(deps: DepsMut, _env: Env, info: MessageInfo, msg: ExecMsg) -> StdResult<Response> {
-    use contract::execute::{donate, reset};
+pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecMsg) -> StdResult<Response> {
+    use contract::execute::{donate, reset, withdraw};
     use msg::ExecMsg::*;
     match msg {
         Donate {} => donate(deps, info),
         Reset { value } => reset(deps, info, value),
+        Withdraw {} => withdraw(deps, env, info),
     }
 }
 
@@ -138,10 +139,8 @@ mod test {
             )
             .unwrap();
 
-        // increment counter in state by one
         app.execute_contract(sender, contract_addr.clone(), &ExecMsg::Donate {}, &[]);
 
-        // get counter from state
         let resp: ValueResp = app
             .wrap()
             .query_wasm_smart(contract_addr, &QueryMsg::Value {})
@@ -176,7 +175,6 @@ mod test {
             )
             .unwrap();
 
-        // increment counter in state by one
         app.execute_contract(
             sender,
             contract_addr.clone(),
@@ -185,7 +183,6 @@ mod test {
         )
         .unwrap();
 
-        // get counter from state
         let resp: ValueResp = app
             .wrap()
             .query_wasm_smart(contract_addr, &QueryMsg::Value {})
@@ -215,11 +212,9 @@ mod test {
             )
             .unwrap();
 
-        // increment counter in state by one
         app.execute_contract(sender, contract_addr.clone(), &ExecMsg::Donate {}, &[])
             .unwrap();
 
-        // get counter from state
         let resp: ValueResp = app
             .wrap()
             .query_wasm_smart(contract_addr, &QueryMsg::Value {})
@@ -263,5 +258,77 @@ mod test {
             .unwrap();
 
         assert_eq!(resp, ValueResp { value: 5 });
+    }
+
+    #[test]
+    fn execute_withdraw() {
+        let owner = Addr::unchecked("owner");
+        let sender1 = Addr::unchecked("sender1");
+        let sender2 = Addr::unchecked("sender2");
+
+        let mut app = App::new(|router, _api, storage| {
+            router
+                .bank
+                .init_balance(storage, &sender1, coins(10, "NEAR"))
+                .unwrap();
+
+            router
+                .bank
+                .init_balance(storage, &sender2, coins(5, "NEAR"))
+                .unwrap()
+        });
+
+        let contract_id = app.store_code(counting_contract());
+
+        let contract_addr = app
+            .instantiate_contract(
+                contract_id,
+                owner.clone(),
+                &InitMsg {
+                    counter: 0,
+                    minimal_donation: coin(5, "NEAR"),
+                },
+                &[],
+                "Counting Contract",
+                None,
+            )
+            .unwrap();
+
+        app.execute_contract(
+            sender1.clone(),
+            contract_addr.clone(),
+            &ExecMsg::Donate {},
+            &coins(10, "NEAR"),
+        )
+        .unwrap();
+
+        app.execute_contract(
+            sender2.clone(),
+            contract_addr.clone(),
+            &ExecMsg::Donate {},
+            &coins(5, "NEAR"),
+        )
+        .unwrap();
+
+        app.execute_contract(
+            owner.clone(),
+            contract_addr.clone(),
+            &ExecMsg::Withdraw {},
+            &[],
+        )
+        .unwrap();
+
+        let resp: ValueResp = app
+            .wrap()
+            .query_wasm_smart(contract_addr, &QueryMsg::Value {})
+            .unwrap();
+
+        assert_eq!(
+            app.wrap().query_all_balances(owner).unwrap(),
+            coins(15, "NEAR")
+        );
+
+        assert_eq!(app.wrap().query_all_balances(sender1).unwrap(), &[]);
+        assert_eq!(app.wrap().query_all_balances(sender2).unwrap(), &[]);
     }
 }

@@ -27,4 +27,5 @@ pub struct InitMsg {
 pub enum ExecMsg {
     Donate {},
     Reset { value: u64 },
+    Withdraw {},
 }
