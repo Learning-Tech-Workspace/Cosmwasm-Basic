@@ -26,6 +26,12 @@ pub struct InitMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecMsg {
     Donate {},
-    Reset { value: u64 },
+    Reset {
+        value: u64,
+    },
     Withdraw {},
+    WithdrawTo {
+        receiver: String,
+        limit_funds: Vec<Coin>,
+    },
 }

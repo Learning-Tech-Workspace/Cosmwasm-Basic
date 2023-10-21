@@ -35,11 +35,15 @@ pub fn query(deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
 
 #[entry_point]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecMsg) -> StdResult<Response> {
-    use contract::execute::{donate, reset, withdraw};
+    use contract::execute::{donate, reset, withdraw, withdraw_to};
     use msg::ExecMsg::*;
     match msg {
         Donate {} => donate(deps, info),
         Reset { value } => reset(deps, info, value),
         Withdraw {} => withdraw(deps, env, info),
+        WithdrawTo {
+            receiver,
+            limit_funds,
+        } => withdraw_to(deps, env, info, receiver, limit_funds),
     }
 }

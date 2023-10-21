@@ -180,6 +180,7 @@ mod test {
 
     #[test]
     fn execute_reset() {
+        let owner = Addr::unchecked("owner");
         let mut app = App::default();
 
         let contract_id = app.store_code(counting_contract());
@@ -189,7 +190,7 @@ mod test {
         let contract_addr = app
             .instantiate_contract(
                 contract_id,
-                sender.clone(),
+                owner.clone(),
                 &InitMsg {
                     counter: 0,
                     minimal_donation: coin(10, "NEAR"),
@@ -201,7 +202,7 @@ mod test {
             .unwrap();
 
         app.execute_contract(
-            sender,
+            owner,
             contract_addr.clone(),
             &ExecMsg::Reset { value: 5 },
             &[],
@@ -288,6 +289,65 @@ mod test {
         assert_eq!(
             app.wrap().query_all_balances(contract_addr).unwrap(),
             vec![]
+        );
+    }
+
+    #[test]
+    fn execute_withdraw_to() {
+        let owner = Addr::unchecked("owner");
+        let sender = Addr::unchecked("sender");
+        let receiver = Addr::unchecked("receiver");
+
+        let mut app = App::new(|router, _api, storage| {
+            router
+                .bank
+                .init_balance(storage, &sender, coins(10, "NEAR"))
+                .unwrap();
+        });
+
+        let contract_id = app.store_code(counting_contract());
+
+        let contract_addr = app
+            .instantiate_contract(
+                contract_id,
+                owner.clone(),
+                &InitMsg {
+                    counter: 0,
+                    minimal_donation: coin(5, "NEAR"),
+                },
+                &[],
+                "Counting Contract",
+                None,
+            )
+            .unwrap();
+
+        app.execute_contract(
+            sender.clone(),
+            contract_addr.clone(),
+            &ExecMsg::Donate {},
+            &coins(10, "NEAR"),
+        )
+        .unwrap();
+
+        app.execute_contract(
+            owner.clone(),
+            contract_addr.clone(),
+            &ExecMsg::WithdrawTo {
+                receiver: (String::from("receiver")),
+                limit_funds: coins(4, "NEAR"),
+            },
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(
+            app.wrap().query_all_balances(contract_addr).unwrap(),
+            coins(6, "NEAR")
+        );
+        assert_eq!(app.wrap().query_all_balances(sender).unwrap(), &[]);
+        assert_eq!(
+            app.wrap().query_all_balances(receiver).unwrap(),
+            coins(4, "NEAR")
         );
     }
 }
