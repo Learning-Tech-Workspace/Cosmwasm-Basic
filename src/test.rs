@@ -275,7 +275,7 @@ mod test {
 
         let resp: ValueResp = app
             .wrap()
-            .query_wasm_smart(contract_addr, &QueryMsg::Value {})
+            .query_wasm_smart(contract_addr.clone(), &QueryMsg::Value {})
             .unwrap();
 
         assert_eq!(
@@ -285,5 +285,9 @@ mod test {
 
         assert_eq!(app.wrap().query_all_balances(sender1).unwrap(), &[]);
         assert_eq!(app.wrap().query_all_balances(sender2).unwrap(), &[]);
+        assert_eq!(
+            app.wrap().query_all_balances(contract_addr).unwrap(),
+            vec![]
+        );
     }
 }

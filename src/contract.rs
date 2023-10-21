@@ -1,16 +1,16 @@
-use cosmwasm_std::{Addr, Coin, DepsMut, Env, Response, StdResult};
+use cosmwasm_std::{Addr, Coin, DepsMut, Env, MessageInfo, Response, StdResult};
 
 use crate::state::{COUNTER, MINIMAL_DONATION, OWNER};
 
 pub fn instantiate(
     deps: DepsMut,
-    env: Env,
+    info: MessageInfo,
     counter: u64,
     minimal_donation: Coin,
 ) -> StdResult<Response> {
     COUNTER.save(deps.storage, &counter)?;
     MINIMAL_DONATION.save(deps.storage, &minimal_donation)?;
-    OWNER.save(deps.storage, &Addr::unchecked("owner"));
+    OWNER.save(deps.storage, &info.sender);
     Ok(Response::new())
 }
 

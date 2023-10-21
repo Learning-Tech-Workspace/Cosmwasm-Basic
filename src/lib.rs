@@ -12,14 +12,14 @@ mod test;
 #[entry_point]
 pub fn instantiate(
     deps: DepsMut,
-    env: Env,
-    _info: MessageInfo,
+    _env: Env,
+    info: MessageInfo,
     msg: InitMsg,
 ) -> StdResult<Response> {
     // like the main function
     // call when first time create
     use contract::instantiate;
-    instantiate(deps, env, msg.counter, msg.minimal_donation);
+    instantiate(deps, info, msg.counter, msg.minimal_donation);
     Ok(Response::new())
 }
 
