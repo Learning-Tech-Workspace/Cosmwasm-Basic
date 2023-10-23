@@ -60,10 +60,12 @@ pub mod execute {
         Ok(resp)
     }
 
-    pub fn reset(deps: DepsMut, info: MessageInfo, value: u64) -> StdResult<Response> {
+    pub fn reset(deps: DepsMut, info: MessageInfo, value: u64) -> Result<Response, ContractError> {
         let owner = OWNER.load(deps.storage)?;
         if owner != info.sender {
-            return Err(StdError::generic_err("Unauthorized")).unwrap();
+            return Err(ContractError::Unauthorized {
+                owner: (owner.to_string()),
+            });
         }
 
         COUNTER.update(deps.storage, |counter| -> StdResult<_> { Ok(value) })?;
@@ -104,10 +106,17 @@ pub mod execute {
         info: MessageInfo,
         receiver: String,
         limit_funds: Vec<Coin>,
-    ) -> StdResult<Response> {
+    ) -> Result<Response, ContractError> {
+        let owner = OWNER.load(deps.storage)?;
+        if info.sender != owner {
+            return Err(ContractError::Unauthorized {
+                owner: (owner.to_string()),
+            });
+        }
+
         let checked = deps.api.addr_validate(receiver.as_str());
         if checked.is_err() {
-            return Err(StdError::generic_err("Invalid address"));
+            return Err(ContractError::InvalidAddress);
         } else {
             let receiver_addr = checked.unwrap();
 

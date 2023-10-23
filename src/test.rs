@@ -392,4 +392,92 @@ mod test {
             err.downcast().unwrap(),
         );
     }
+
+    #[test]
+    fn execute_unauthorized_withdraw_to() {
+        let owner = Addr::unchecked("owner");
+        let receiver = Addr::unchecked("receiver");
+
+        let mut app = App::default();
+
+        let contract_id = app.store_code(counting_contract());
+
+        let contract_addr = app
+            .instantiate_contract(
+                contract_id,
+                owner.clone(),
+                &InitMsg {
+                    counter: 0,
+                    minimal_donation: coin(5, "NEAR"),
+                },
+                &[],
+                "Counting Contract",
+                None,
+            )
+            .unwrap();
+
+        let err = app
+            .execute_contract(
+                receiver.clone(),
+                contract_addr.clone(),
+                &ExecMsg::WithdrawTo {
+                    receiver: (String::from("receiver")),
+                    limit_funds: coins(4, "NEAR"),
+                },
+                &[],
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            ContractError::Unauthorized {
+                owner: (owner.to_string())
+            },
+            err.downcast().unwrap()
+        )
+    }
+
+    #[test]
+    fn execute_unauthorized_reset() {
+        let owner = Addr::unchecked("owner");
+        let mut app = App::default();
+
+        let contract_id = app.store_code(counting_contract());
+
+        let sender = Addr::unchecked("sender");
+
+        let contract_addr = app
+            .instantiate_contract(
+                contract_id,
+                owner.clone(),
+                &InitMsg {
+                    counter: 0,
+                    minimal_donation: coin(10, "NEAR"),
+                },
+                &[],
+                "Counting Contract",
+                None,
+            )
+            .unwrap();
+
+        let err = app
+            .execute_contract(
+                sender.clone(),
+                contract_addr.clone(),
+                &ExecMsg::Reset { value: 5 },
+                &[],
+            )
+            .unwrap_err();
+
+        let resp: ValueResp = app
+            .wrap()
+            .query_wasm_smart(contract_addr, &QueryMsg::Value {})
+            .unwrap();
+
+        assert_eq!(
+            ContractError::Unauthorized {
+                owner: (owner.to_string())
+            },
+            err.downcast().unwrap()
+        )
+    }
 }

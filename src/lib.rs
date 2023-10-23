@@ -46,11 +46,11 @@ pub fn execute(
     use msg::ExecMsg::*;
     match msg {
         Donate {} => donate(deps, info).map_err(ContractError::Std),
-        Reset { value } => reset(deps, info, value).map_err(ContractError::Std),
+        Reset { value } => reset(deps, info, value),
         Withdraw {} => withdraw(deps, env, info),
         WithdrawTo {
             receiver,
             limit_funds,
-        } => withdraw_to(deps, env, info, receiver, limit_funds).map_err(ContractError::Std),
+        } => withdraw_to(deps, env, info, receiver, limit_funds),
     }
 }

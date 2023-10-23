@@ -8,4 +8,7 @@ pub enum ContractError {
 
     #[error("Unauthorized - only {owner} can call it")]
     Unauthorized { owner: String },
+
+    #[error("Invalid address")]
+    InvalidAddress,
 }
