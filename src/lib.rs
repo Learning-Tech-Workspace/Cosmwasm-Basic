@@ -2,9 +2,11 @@ use cosmwasm_std::{
     entry_point, to_binary, Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdResult,
 };
 
+use error::ContractError;
 use msg::{ExecMsg, InitMsg, QueryMsg};
 
 mod contract;
+pub mod error;
 pub mod msg;
 mod state;
 mod test;
@@ -34,16 +36,21 @@ pub fn query(deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
 }
 
 #[entry_point]
-pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecMsg) -> StdResult<Response> {
+pub fn execute(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    msg: ExecMsg,
+) -> Result<Response, ContractError> {
     use contract::execute::{donate, reset, withdraw, withdraw_to};
     use msg::ExecMsg::*;
     match msg {
-        Donate {} => donate(deps, info),
-        Reset { value } => reset(deps, info, value),
+        Donate {} => donate(deps, info).map_err(ContractError::Std),
+        Reset { value } => reset(deps, info, value).map_err(ContractError::Std),
         Withdraw {} => withdraw(deps, env, info),
         WithdrawTo {
             receiver,
             limit_funds,
-        } => withdraw_to(deps, env, info, receiver, limit_funds),
+        } => withdraw_to(deps, env, info, receiver, limit_funds).map_err(ContractError::Std),
     }
 }

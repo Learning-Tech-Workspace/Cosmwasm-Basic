@@ -4,6 +4,7 @@ mod test {
     use cw_multi_test::{App, Contract, ContractWrapper, Executor};
 
     use crate::{
+        error::ContractError,
         execute, instantiate,
         msg::{ExecMsg, InitMsg, QueryMsg, ValueResp},
         query,
@@ -348,6 +349,47 @@ mod test {
         assert_eq!(
             app.wrap().query_all_balances(receiver).unwrap(),
             coins(4, "NEAR")
+        );
+    }
+
+    #[test]
+    fn execute_unauthorized_withdraw() {
+        let owner = Addr::unchecked("owner");
+        let member = Addr::unchecked("member");
+
+        let mut app = App::default();
+
+        let contract_id = app.store_code(counting_contract());
+
+        let contract_addr = app
+            .instantiate_contract(
+                contract_id,
+                owner.clone(),
+                &InitMsg {
+                    counter: 0,
+                    minimal_donation: coin(5, "NEAR"),
+                },
+                &[],
+                "Counting Contract",
+                None,
+            )
+            .unwrap();
+
+        let err = app
+            .execute_contract(
+                member.clone(),
+                contract_addr.clone(),
+                &ExecMsg::Withdraw {},
+                &[],
+            )
+            .unwrap_err();
+
+        // the one has have explicit type should be in the left in this case is ContractError
+        assert_eq!(
+            ContractError::Unauthorized {
+                owner: owner.to_string()
+            },
+            err.downcast().unwrap(),
         );
     }
 }
