@@ -212,13 +212,9 @@ fn expecting_no_funds() {
     )
     .unwrap();
 
-    app.execute_contract(sender, contract.addr().clone(), &ExecMsg::Donate {}, &[])
-        .unwrap();
+    contract.donate(&mut app, &sender, &[]);
 
-    let resp: ValueResp = app
-        .wrap()
-        .query_wasm_smart(contract.addr(), &QueryMsg::Value {})
-        .unwrap();
+    let resp: ValueResp = contract.query_value(&app).unwrap();
 
     assert_eq!(resp, ValueResp { value: 0 });
 }
