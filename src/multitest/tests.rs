@@ -1,34 +1,28 @@
-use cosmwasm_std::{coin, coins, Addr, Empty};
-use cw_multi_test::{App, Contract, ContractWrapper};
+use cosmwasm_std::{coin, coins, Addr};
+use cw_multi_test::{App, Executor};
 
 use crate::{
-    contract,
     error::ContractError,
-    execute, instantiate,
-    msg::{QueryMsg, ValueResp},
-    multitest::CountingContract,
-    query,
+    msg::{ExecMsg, QueryMsg, ValueResp},
 };
 
-fn counting_contract() -> Box<dyn Contract<Empty>> {
-    let contract = ContractWrapper::new(execute, instantiate, query);
-    Box::new(contract)
-}
+use super::contract::CountingContract;
 
 const NEAR: &str = "NEAR";
 
 #[test]
 fn query_value() {
     let sender = Addr::unchecked("sender");
-    let mut app = App::default(); // like the stimulation blockchain
+    let mut app = App::default();
 
-    let contract_id = app.store_code(counting_contract()); // like the deploy smart contract into blockchain
+    let code_id = CountingContract::store_code(&mut app);
 
     let contract = CountingContract::instantiate(
         &mut app,
-        contract_id,
+        code_id,
         &sender,
         "Counting Contract",
+        None,
         coin(10, NEAR),
     )
     .unwrap();
@@ -42,15 +36,16 @@ fn query_value() {
 fn execute_donate() {
     let mut app = App::default();
 
-    let contract_id = app.store_code(counting_contract());
+    let code_id = CountingContract::store_code(&mut app);
 
     let sender = Addr::unchecked("sender");
 
     let contract = CountingContract::instantiate(
         &mut app,
-        contract_id,
+        code_id,
         &sender,
         "Counting contract",
+        None,
         coin(10, NEAR),
     )
     .unwrap();
@@ -72,13 +67,14 @@ fn execute_donate_with_funds() {
             .unwrap()
     });
 
-    let contract_id = app.store_code(counting_contract());
+    let code_id = CountingContract::store_code(&mut app);
 
     let contract = CountingContract::instantiate(
         &mut app,
-        contract_id,
+        code_id,
         &sender,
         "Counting contract",
+        None,
         coin(10, NEAR),
     )
     .unwrap();
@@ -113,13 +109,14 @@ fn execute_withdraw() {
             .unwrap()
     });
 
-    let contract_id = app.store_code(counting_contract());
+    let code_id = CountingContract::store_code(&mut app);
 
     let contract = CountingContract::instantiate(
         &mut app,
-        contract_id,
+        code_id,
         &owner,
         "Counting contract",
+        None,
         coin(10, NEAR),
     )
     .unwrap();
@@ -152,13 +149,14 @@ fn execute_unauthorized_withdraw() {
 
     let mut app = App::default();
 
-    let contract_id = app.store_code(counting_contract());
+    let code_id = CountingContract::store_code(&mut app);
 
     let contract = CountingContract::instantiate(
         &mut app,
-        contract_id,
+        code_id,
         &owner,
         "Counting contract",
+        None,
         coin(10, NEAR),
     )
     .unwrap();
@@ -171,4 +169,225 @@ fn execute_unauthorized_withdraw() {
         },
         err,
     );
+}
+
+#[test]
+fn query_incremented() {
+    let mut app = App::default();
+
+    let code_id = CountingContract::store_code(&mut app);
+
+    let contract = CountingContract::instantiate(
+        &mut app,
+        code_id,
+        &Addr::unchecked("owner"),
+        "Counting contract",
+        None,
+        coin(10, NEAR),
+    )
+    .unwrap();
+
+    let resp: ValueResp = app
+        .wrap()
+        .query_wasm_smart(contract.addr(), &QueryMsg::Incremented { value: (1) })
+        .unwrap();
+
+    assert_eq!(resp, ValueResp { value: 2 });
+}
+
+#[test]
+fn expecting_no_funds() {
+    let sender = Addr::unchecked("sender");
+    let mut app = App::default();
+
+    let code_id = CountingContract::store_code(&mut app);
+
+    let contract = CountingContract::instantiate(
+        &mut app,
+        code_id,
+        &Addr::unchecked("owner"),
+        "Counting contract",
+        None,
+        coin(10, NEAR),
+    )
+    .unwrap();
+
+    app.execute_contract(sender, contract.addr().clone(), &ExecMsg::Donate {}, &[])
+        .unwrap();
+
+    let resp: ValueResp = app
+        .wrap()
+        .query_wasm_smart(contract.addr(), &QueryMsg::Value {})
+        .unwrap();
+
+    assert_eq!(resp, ValueResp { value: 0 });
+}
+
+#[test]
+fn execute_reset() {
+    let owner = Addr::unchecked("owner");
+    let mut app = App::default();
+
+    let code_id = CountingContract::store_code(&mut app);
+
+    let contract = CountingContract::instantiate(
+        &mut app,
+        code_id,
+        &Addr::unchecked("owner"),
+        "Counting contract",
+        None,
+        coin(10, NEAR),
+    )
+    .unwrap();
+
+    let sender = Addr::unchecked("sender");
+
+    app.execute_contract(
+        owner,
+        contract.addr().clone(),
+        &ExecMsg::Reset { value: 5 },
+        &[],
+    );
+
+    let resp: ValueResp = app
+        .wrap()
+        .query_wasm_smart(contract.addr(), &QueryMsg::Value {})
+        .unwrap();
+
+    assert_eq!(resp, ValueResp { value: 5 });
+}
+
+#[test]
+fn execute_withdraw_to() {
+    let owner = Addr::unchecked("owner");
+    let sender = Addr::unchecked("sender");
+    let receiver = Addr::unchecked("receiver");
+
+    let mut app = App::new(|router, _api, storage| {
+        router
+            .bank
+            .init_balance(storage, &sender, coins(10, "NEAR"))
+            .unwrap();
+    });
+
+    let code_id = CountingContract::store_code(&mut app);
+
+    let contract = CountingContract::instantiate(
+        &mut app,
+        code_id,
+        &Addr::unchecked("owner"),
+        "Counting contract",
+        None,
+        coin(10, NEAR),
+    )
+    .unwrap();
+
+    app.execute_contract(
+        sender.clone(),
+        contract.addr().clone(),
+        &ExecMsg::Donate {},
+        &coins(10, "NEAR"),
+    )
+    .unwrap();
+
+    app.execute_contract(
+        owner.clone(),
+        contract.addr().clone(),
+        &ExecMsg::WithdrawTo {
+            receiver: (String::from("receiver")),
+            limit_funds: coins(4, "NEAR"),
+        },
+        &[],
+    )
+    .unwrap();
+
+    assert_eq!(
+        app.wrap().query_all_balances(contract.addr()).unwrap(),
+        coins(6, "NEAR")
+    );
+    assert_eq!(app.wrap().query_all_balances(sender).unwrap(), &[]);
+    assert_eq!(
+        app.wrap().query_all_balances(receiver).unwrap(),
+        coins(4, "NEAR")
+    );
+}
+
+#[test]
+fn execute_unauthorized_withdraw_to() {
+    let owner = Addr::unchecked("owner");
+    let receiver = Addr::unchecked("receiver");
+
+    let mut app = App::default();
+
+    let code_id = CountingContract::store_code(&mut app);
+
+    let contract = CountingContract::instantiate(
+        &mut app,
+        code_id,
+        &Addr::unchecked("owner"),
+        "Counting contract",
+        None,
+        coin(10, NEAR),
+    )
+    .unwrap();
+
+    let err = app
+        .execute_contract(
+            receiver.clone(),
+            contract.addr().clone(),
+            &ExecMsg::WithdrawTo {
+                receiver: (String::from("receiver")),
+                limit_funds: coins(4, "NEAR"),
+            },
+            &[],
+        )
+        .unwrap_err();
+
+    assert_eq!(
+        ContractError::Unauthorized {
+            owner: (owner.to_string())
+        },
+        err.downcast().unwrap()
+    )
+}
+
+#[test]
+fn execute_unauthorized_reset() {
+    let owner = Addr::unchecked("owner");
+    let mut app = App::default();
+
+    let code_id = CountingContract::store_code(&mut app);
+
+    let contract = CountingContract::instantiate(
+        &mut app,
+        code_id,
+        &Addr::unchecked("owner"),
+        "Counting contract",
+        None,
+        coin(10, NEAR),
+    )
+    .unwrap();
+
+    let sender = Addr::unchecked("sender");
+
+    let err = app
+        .execute_contract(
+            sender.clone(),
+            contract.addr().clone(),
+            &ExecMsg::Reset { value: 5 },
+            &[],
+        )
+        .unwrap_err();
+
+    let resp: ValueResp = app
+        .wrap()
+        .query_wasm_smart(contract.addr(), &QueryMsg::Value {})
+        .unwrap();
+
+    assert_eq!(
+        ContractError::Unauthorized {
+            owner: (owner.to_string())
+        },
+        err.downcast().unwrap()
+    )
 }
