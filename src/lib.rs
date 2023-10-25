@@ -1,5 +1,8 @@
+#[cfg(not(feature = "library"))]
+use cosmwasm_std::entry_point;
+
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdResult,
+    to_binary, Binary, Deps, DepsMut, Empty, Env, MessageInfo, Response, StdResult,
 };
 
 use error::ContractError;
@@ -8,11 +11,11 @@ use msg::{ExecMsg, InitMsg, QueryMsg};
 mod contract;
 pub mod error;
 pub mod msg;
-#[cfg(test)]
+#[cfg(any(test, feature = "tests"))]
 mod multitest;
 mod state;
 
-#[entry_point]
+#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
@@ -26,7 +29,7 @@ pub fn instantiate(
     Ok(Response::new())
 }
 
-#[entry_point]
+#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
     use contract::query::{incremented, value};
     use msg::QueryMsg::*;
@@ -36,7 +39,7 @@ pub fn query(deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
-#[entry_point]
+#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
     env: Env,
